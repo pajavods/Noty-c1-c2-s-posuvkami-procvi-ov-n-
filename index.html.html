@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Poznávání not: C1-C2</title>
+    <script src="https://cdn.jsdelivr.net/npm/tone@14.7.58/build/Tone.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Pacifico&family=Inter:wght@400;700&display=swap');
+        
+        :root {
+            --primary-color: #ff6f61; /* Vibrant Coral */
+            --secondary-color: #f7e9e4; /* Light Peach */
+            --correct-color: #4CAF50; /* Green */
+            --incorrect-color: #f44336; /* Red */
+            --text-color: #333;
+            --background-color: #fce4ec; /* Light Pink */
+            --button-bg: #fff;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #fce4ec 0%, #e0f7fa 100%);
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .game-container {
+            background-color: var(--secondary-color);
+            border-radius: 30px;
+            padding: 40px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 100%;
+            max-width: 600px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        h1 {
+            font-family: 'Pacifico', cursive;
+            color: var(--primary-color);
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+            margin-top: 0;
+            font-size: 3rem;
+        }
+
+        #canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+        }
+
+        #note-canvas {
+            background: #fff;
+            border-radius: 15px;
+            border: 3px solid var(--primary-color);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        #message-area {
+            font-size: 1.8rem;
+            font-weight: bold;
+            height: 40px;
+            animation: popIn 0.5s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        
+        @keyframes popIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        #gemini-tip-container {
+            min-height: 80px;
+            border-radius: 15px;
+            background-color: #fff;
+            padding: 20px;
+            text-align: left;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            display: none;
+            transition: all 0.5s ease-in-out;
+        }
+        
+        .buttons-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .note-button {
+            background: #fff;
+            border: 2px solid var(--primary-color);
+            color: var(--primary-color);
+            padding: 12px 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: bold;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .note-button:hover {
+            background-color: var(--primary-color);
+            color: #fff;
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .note-button:active {
+            transform: translateY(0) scale(1);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .note-button.correct {
+            background-color: var(--correct-color);
+            border-color: var(--correct-color);
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        .note-button.incorrect {
+            background-color: var(--incorrect-color);
+            border-color: var(--incorrect-color);
+            color: #fff;
+            transform: scale(1.1);
+        }
+
+        .score-container {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+        
+        .score-container span {
+            margin: 0 10px;
+        }
+
+        .correct-score { color: var(--correct-color); }
+        .incorrect-score { color: var(--incorrect-color); }
+        
+        #loading-indicator {
+            display: none;
+            text-align: center;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>Poznej notu!</h1>
+        <div id="canvas-container">
+            <canvas id="note-canvas" width="400" height="200"></canvas>
+        </div>
+        <div id="message-area"></div>
+        
+        <div id="gemini-tip-container" class="rounded-lg shadow-lg bg-gray-100 p-4">
+            <div id="loading-indicator" class="text-sm italic text-gray-500">Načítání tipu...</div>
+            <p id="gemini-tip-text" class="text-sm text-gray-800"></p>
+        </div>
+
+        <div class="buttons-container" id="note-buttons"></div>
+        
+        <div class="score-container">
+            Skóre: <span class="correct-score" id="correct-score">0</span> / <span class="incorrect-score" id="incorrect-score">0</span>
+        </div>
+        
+        <button id="gemini-tip-button" class="note-button" style="display: none;">✨ Zjisti více o této notě</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const canvas = document.getElementById('note-canvas');
+            const ctx = canvas.getContext('2d');
+            const messageArea = document.getElementById('message-area');
+            const correctScoreEl = document.getElementById('correct-score');
+            const incorrectScoreEl = document.getElementById('incorrect-score');
+            const noteButtonsContainer = document.getElementById('note-buttons');
+            const geminiTipButton = document.getElementById('gemini-tip-button');
+            const geminiTipContainer = document.getElementById('gemini-tip-container');
+            const geminiTipText = document.getElementById('gemini-tip-text');
+            const loadingIndicator = document.getElementById('loading-indicator');
+
+            let currentNote = '';
+            let correctScore = 0;
+            let incorrectScore = 0;
+            let notesToDisplay = [];
+
+            // Mapování not na MIDI čísla a pozice na notové osnově
+            const notes = {
+                'C1': { midi: 24, pos: 5 },
+                'C♯1': { midi: 25, pos: 5 },
+                'D♭1': { midi: 25, pos: 4.5 },
+                'D1': { midi: 26, pos: 4.5 },
+                'D♯1': { midi: 27, pos: 4.5 },
+                'E♭1': { midi: 27, pos: 4 },
+                'E1': { midi: 28, pos: 4 },
+                'F1': { midi: 29, pos: 3.5 },
+                'F♯1': { midi: 30, pos: 3.5 },
+                'G♭1': { midi: 30, pos: 3 },
+                'G1': { midi: 31, pos: 3 },
+                'G♯1': { midi: 32, pos: 3 },
+                'A♭1': { midi: 32, pos: 2.5 },
+                'A1': { midi: 33, pos: 2.5 },
+                'A♯1': { midi: 34, pos: 2.5 },
+                'B♭1': { midi: 34, pos: 2 },
+                'H1': { midi: 35, pos: 2 },
+                'C2': { midi: 36, pos: 1.5 },
+            };
+            
+            const noteNames = ['C1', 'D1', 'E1', 'F1', 'G1', 'A1', 'H1', 'C2', 'C♯1', 'D♭1', 'D♯1', 'E♭1', 'F♯1', 'G♭1', 'G♯1', 'A♭1', 'A♯1', 'B♭1'];
+            
+            const allNotes = ['C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'H'];
+
+            const synth = new Tone.Synth({
+                oscillator: { type: 'sine' },
+                envelope: {
+                    attack: 0.05,
+                    decay: 0.2,
+                    sustain: 0.5,
+                    release: 1,
+                },
+            }).toDestination();
+            
+            function playNote(midi) {
+                const freq = Tone.Midi(midi).toFrequency();
+                synth.triggerAttackRelease(freq, '1n');
+            }
+
+            function createNoteButtons() {
+                noteButtonsContainer.innerHTML = '';
+                allNotes.forEach(note => {
+                    const button = document.createElement('button');
+                    button.classList.add('note-button');
+                    button.textContent = note;
+                    button.dataset.note = note;
+                    button.onclick = () => checkAnswer(button);
+                    noteButtonsContainer.appendChild(button);
+                });
+            }
+
+            function checkAnswer(button) {
+                const selectedNoteName = button.textContent;
+                const currentNoteName = currentNote.slice(0, -1);
+
+                let isCorrect = selectedNoteName === currentNoteName;
+                
+                if (isCorrect) {
+                    messageArea.textContent = 'Správně!';
+                    messageArea.style.color = getComputedStyle(document.documentElement).getPropertyValue('--correct-color');
+                    correctScore++;
+                } else {
+                    messageArea.textContent = 'Špatně! Správná nota byla: ' + currentNoteName;
+                    messageArea.style.color = getComputedStyle(document.documentElement).getPropertyValue('--incorrect-color');
+                    incorrectScore++;
+                }
+
+                correctScoreEl.textContent = correctScore;
+                incorrectScoreEl.textContent = incorrectScore;
+                
+                button.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+                setTimeout(() => {
+                    noteButtonsContainer.querySelectorAll('.note-button').forEach(btn => btn.classList.remove('correct', 'incorrect'));
+                    geminiTipButton.style.display = 'block';
+                    setTimeout(generateNewNote, 2000); 
+                }, 1000);
+            }
+
+            // Funkce pro kreslení notové osnovy a noty
+            function drawStaffAndNote(noteName) {
+                const width = canvas.width;
+                const height = canvas.height;
+                const staffLineHeight = 15;
+                const staffYStart = (height / 2) - (2 * staffLineHeight);
+
+                ctx.clearRect(0, 0, width, height);
+
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, staffYStart + i * staffLineHeight);
+                    ctx.lineTo(width, staffYStart + i * staffLineHeight);
+                    ctx.stroke();
+                }
+
+                ctx.font = `${Math.floor(height / 3)}px serif`;
+                ctx.fillText('𝄞', 20, staffYStart + (3 * staffLineHeight) + 2);
+
+                const notePos = notes[noteName].pos;
+                const noteY = staffYStart + (notePos * staffLineHeight);
+                const noteX = width / 2;
+                const noteRadius = 10;
+
+                ctx.fillStyle = '#333';
+                ctx.beginPath();
+                ctx.ellipse(noteX, noteY, noteRadius, noteRadius * 0.75, 0, 0, 2 * Math.PI);
+                ctx.fill();
+
+                const stemLength = 35;
+                ctx.beginPath();
+                if (notePos > 2) { 
+                    ctx.moveTo(noteX + noteRadius, noteY);
+                    ctx.lineTo(noteX + noteRadius, noteY - stemLength);
+                } else {
+                    ctx.moveTo(noteX - noteRadius, noteY);
+                    ctx.lineTo(noteX - noteRadius, noteY + stemLength); 
+                }
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                const accidental = noteName.includes('♯') ? '♯' : (noteName.includes('♭') ? '♭' : '');
+                if (accidental) {
+                    ctx.font = '28px sans-serif';
+                    // Opravená svislá pozice posuvky
+                    const accidentalY = noteY + (noteRadius * 0.5); 
+                    ctx.fillText(accidental, noteX - 25, accidentalY);
+                }
+
+                ctx.lineWidth = 2;
+                if (noteName.startsWith('C1') || noteName.startsWith('C♯1') || noteName.startsWith('D♭1')) {
+                    const lineY = staffYStart + 5 * staffLineHeight;
+                    ctx.beginPath();
+                    ctx.moveTo(noteX - 25, lineY);
+                    ctx.lineTo(noteX + 25, lineY);
+                    ctx.stroke();
+                }
+            }
+
+            // Shuffle function (Fisher-Yates)
+            function shuffle(array) {
+                let currentIndex = array.length, randomIndex;
+                while (currentIndex !== 0) {
+                    randomIndex = Math.floor(Math.random() * currentIndex);
+                    currentIndex--;
+                    [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+                }
+                return array;
+            }
+
+            function generateNewNote() {
+                messageArea.textContent = '';
+                geminiTipButton.style.display = 'none';
+                geminiTipContainer.style.display = 'none';
+                geminiTipText.textContent = '';
+                
+                if (notesToDisplay.length > 0) {
+                    currentNote = notesToDisplay.pop();
+                    drawStaffAndNote(currentNote);
+                    playNote(notes[currentNote].midi);
+                } else {
+                    endGame();
+                }
+            }
+
+            function endGame() {
+                // Clear canvas and buttons
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                noteButtonsContainer.innerHTML = '';
+                geminiTipButton.style.display = 'none';
+                geminiTipContainer.style.display = 'none';
+
+                // Display final message
+                const totalNotes = correctScore + incorrectScore;
+                const percentage = totalNotes > 0 ? (correctScore / totalNotes) * 100 : 0;
+                let finalMessage = `Skvělá práce! Dokončil jsi všechny noty.\n`;
+                
+                if (percentage === 100) {
+                    finalMessage += `Máš perfektní skóre ${correctScore} ze ${totalNotes}!\nJsi opravdový mistr.`;
+                } else if (percentage >= 80) {
+                    finalMessage += `Máš skóre ${correctScore} ze ${totalNotes}.\nJsi vážně šikovný/á!`;
+                } else {
+                    finalMessage += `Máš skóre ${correctScore} ze ${totalNotes}.\nJen tak dál, noty si brzy zapamatuješ.`;
+                }
+
+                messageArea.textContent = finalMessage;
+                
+                // Add play again button
+                const playAgainButton = document.createElement('button');
+                playAgainButton.textContent = 'Hrát znovu';
+                playAgainButton.classList.add('note-button');
+                playAgainButton.onclick = () => {
+                    noteButtonsContainer.innerHTML = '';
+                    correctScore = 0;
+                    incorrectScore = 0;
+                    correctScoreEl.textContent = 0;
+                    incorrectScoreEl.textContent = 0;
+                    startGame();
+                };
+                noteButtonsContainer.appendChild(playAgainButton);
+            }
+
+            function startGame() {
+                notesToDisplay = shuffle([...noteNames]); // Shuffle a new array for the round
+                createNoteButtons();
+                generateNewNote();
+            }
+
+            const startButton = document.createElement('button');
+            startButton.textContent = 'Začít hru';
+            startButton.classList.add('note-button');
+            noteButtonsContainer.appendChild(startButton);
+            startButton.onclick = () => {
+                Tone.start();
+                startButton.style.display = 'none';
+                noteButtonsContainer.innerHTML = '';
+                startGame();
+            };
+
+            // ---- Funkce pro integraci s Gemini API ----
+            async function getGeminiTip() {
+                geminiTipContainer.style.display = 'block';
+                loadingIndicator.style.display = 'block';
+                geminiTipText.textContent = '';
+                geminiTipButton.style.display = 'none';
+                
+                const noteTipPrompt = `Napiš jeden krátký a jednoduchý vzdělávací tip o notě ${currentNote.slice(0, -1)} pro studenta hudby-začátečníka. Zaměř se na její umístění na notové osnově, její vztah k dalším notám, nebo na nějakou zajímavost z hudební teorie. Používej češtinu a buď stručný, maximálně dvě věty.`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: noteTipPrompt }] }],
+                    tools: [{ "google_search": {} }],
+                    systemInstruction: { parts: [{ text: "Jsi hudební pedagog s přátelským a podpůrným tónem. Poskytuj stručné a srozumitelné tipy." }] },
+                };
+
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    let backoff = 1000;
+                    const maxRetries = 5;
+                    let retries = 0;
+
+                    const fetchWithRetry = async () => {
+                        try {
+                            const response = await fetch(apiUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(payload)
+                            });
+
+                            if (response.status === 429 && retries < maxRetries) {
+                                await new Promise(resolve => setTimeout(resolve, backoff));
+                                backoff *= 2;
+                                retries++;
+                                return await fetchWithRetry();
+                            }
+
+                            if (!response.ok) {
+                                throw new Error(`API error: ${response.statusText}`);
+                            }
+
+                            const result = await response.json();
+                            return result;
+
+                        } catch (error) {
+                            console.error('Fetch error:', error);
+                            return null;
+                        }
+                    };
+
+                    const result = await fetchWithRetry();
+                    const candidate = result?.candidates?.[0];
+
+                    if (candidate && candidate.content?.parts?.[0]?.text) {
+                        const tipText = candidate.content.parts[0].text;
+                        geminiTipText.textContent = tipText;
+                    } else {
+                        geminiTipText.textContent = 'Omlouvám se, nepodařilo se mi vygenerovat tip.';
+                    }
+
+                } catch (error) {
+                    console.error('Generative AI error:', error);
+                    geminiTipText.textContent = 'Došlo k chybě při získávání tipu. Zkus to prosím znovu.';
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                }
+            }
+
+            geminiTipButton.onclick = getGeminiTip;
+        });
+    </script>
+
+</body>
+</html>
